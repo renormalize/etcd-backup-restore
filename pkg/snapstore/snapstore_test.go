@@ -58,6 +58,7 @@ var _ = Describe("Save, List, Fetch, Delete from mock snapstore", func() {
 		snap5      brtypes.Snapshot
 		snapstores map[string]testSnapStore
 		gcsClient  *mockGCSClient
+		absClient  *fakeABSContainerClient
 	)
 
 	BeforeEach(func() {
@@ -116,6 +117,13 @@ var _ = Describe("Save, List, Fetch, Delete from mock snapstore", func() {
 			objectTags: make(map[string]map[string]string),
 		}
 
+		absClient = &fakeABSContainerClient{
+			objects:     objectMap,
+			prefix:      prefixV2,
+			blobClients: make(map[string]*fakeBlockBlobClient),
+			objectTags:  make(map[string]map[string]string),
+		}
+
 		snapstores = map[string]testSnapStore{
 			"s3": {
 				SnapStore: NewS3FromClient(bucket, prefixV2, "/tmp", 5, brtypes.MinChunkSize, &mockS3Client{
@@ -130,11 +138,7 @@ var _ = Describe("Save, List, Fetch, Delete from mock snapstore", func() {
 				objectCountPerSnapshot: 3,
 			},
 			"ABS": {
-				SnapStore: NewABSSnapStoreFromClient(bucket, prefixV2, "/tmp", 5, brtypes.MinChunkSize, &fakeABSContainerClient{
-					objects:     objectMap,
-					prefix:      prefixV2,
-					blobClients: make(map[string]*fakeBlockBlobClient),
-				}),
+				SnapStore:              NewABSSnapStoreFromClient(bucket, prefixV2, "/tmp", 5, brtypes.MinChunkSize, absClient),
 				objectCountPerSnapshot: 1,
 			},
 			"GCS": {
@@ -320,8 +324,10 @@ var _ = Describe("Save, List, Fetch, Delete from mock snapstore", func() {
 				switch provider {
 				case "GCS":
 					tag = gcsClient
+				case "ABS":
+					tag = absClient
 				}
-				if provider == "GCS" {
+				if provider == "GCS" || provider == "ABS" {
 					// the tagged snapshot should not be returned by the List() call
 					taggedSnapshot := snapList[0]
 					taggedSnapshotName := path.Join(taggedSnapshot.Prefix, taggedSnapshot.SnapDir, taggedSnapshot.SnapName)

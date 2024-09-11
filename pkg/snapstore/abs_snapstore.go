@@ -284,7 +284,7 @@ func (a *ABSSnapStore) Fetch(snap brtypes.Snapshot) (io.ReadCloser, error) {
 }
 
 // List will return sorted list with all snapshot files on store.
-func (a *ABSSnapStore) List(_ bool) (brtypes.SnapList, error) {
+func (a *ABSSnapStore) List(includeAll bool) (brtypes.SnapList, error) {
 	prefixTokens := strings.Split(a.prefix, "/")
 	// Last element of the tokens is backup version
 	// Consider the parent of the backup version level (Required for Backward Compatibility)
@@ -319,7 +319,7 @@ func (a *ABSSnapStore) List(_ bool) (brtypes.SnapList, error) {
 					// Tagged snapshots are not listed
 					if blobItem.BlobTags != nil {
 						for _, tag := range blobItem.BlobTags.BlobTagSet {
-							if *tag.Key == brtypes.ExcludeSnapshotMetadataKey && *tag.Value == "true" {
+							if !includeAll && (*tag.Key == brtypes.ExcludeSnapshotMetadataKey && *tag.Value == "true") {
 								// skip this blob
 								logrus.Infof("Found a tag with key %s and value %s on snapshot %s. Skipping.", *tag.Key, *tag.Value, snapshot.SnapName)
 								continue Blob
