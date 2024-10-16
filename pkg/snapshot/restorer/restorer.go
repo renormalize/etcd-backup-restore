@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -135,7 +134,7 @@ func (r *Restorer) Restore(ro brtypes.RestoreOptions, m member.Control) (*embed.
 }
 
 // restoreFromBaseSnapshot restores the etcd data directory from the base snapshot.
-func (r *Restorer) restoreFromBaseSnapshot(ro brtypes.RestoreOptions) (err error) {
+func (r *Restorer) restoreFromBaseSnapshot(ro brtypes.RestoreOptions) error {
 	if path.Join(ro.BaseSnapshot.SnapDir, ro.BaseSnapshot.SnapName) == "" {
 		r.logger.Warnf("Base snapshot path not provided. Will do nothing.")
 		return nil
@@ -167,11 +166,10 @@ func (r *Restorer) restoreFromBaseSnapshot(ro brtypes.RestoreOptions) (err error
 	if err != nil {
 		return fmt.Errorf("failed to create a temporary file for snapshot: %w", err)
 	}
-	// Clean up the temporary resources required for restoration before exiting to ensure disk is not exhausted, and return the error
+	// Clean up the temporary resources required for restoration before exiting to ensure disk is not exhausted
 	defer func() {
-		if rErr := os.Remove(db.Name()); rErr != nil {
-			r.logger.Warnf("Failed to clean up temporary resources allocated for restoration of the database.")
-			err = errors.Join(err, fmt.Errorf("failed to clean up temporary resources created for restoration with error: %w", rErr))
+		if err := os.Remove(db.Name()); err != nil {
+			r.logger.Warnf("Failed to clean up temporary resources allocated for restoration of the database, err: %v", err)
 		}
 	}()
 
