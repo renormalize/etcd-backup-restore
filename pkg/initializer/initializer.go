@@ -103,7 +103,9 @@ func (e *EtcdInitializer) Initialize(mode validator.Mode, failBelowRevision int6
 	metrics.ValidationDurationSeconds.With(prometheus.Labels{metrics.LabelSucceeded: metrics.ValueSucceededTrue}).Observe(time.Since(start).Seconds())
 
 	if dataDirStatus != validator.DataDirectoryValid {
-		if dataDirStatus == validator.DataDirStatusInvalidInMultiNode || (e.Validator.OriginalClusterSize > 1 && dataDirStatus == validator.DataDirectoryCorrupt) || (e.Validator.OriginalClusterSize > 1 && memberHeartbeatPresent) {
+		if dataDirStatus == validator.DataDirStatusInvalidInMultiNode ||
+			(e.Validator.OriginalClusterSize > 1 && dataDirStatus == validator.DataDirectoryCorrupt) ||
+			(e.Validator.OriginalClusterSize > 1 && memberHeartbeatPresent && e.Config.SnapstoreConfig != nil) {
 			start := time.Now()
 			if err := e.restoreInMultiNode(ctx); err != nil {
 				metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleMemberInMultiNode, metrics.LabelSucceeded: metrics.ValueSucceededFalse}).Observe(time.Since(start).Seconds())
@@ -112,6 +114,7 @@ func (e *EtcdInitializer) Initialize(mode validator.Mode, failBelowRevision int6
 			metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleMemberInMultiNode, metrics.LabelSucceeded: metrics.ValueSucceededTrue}).Observe(time.Since(start).Seconds())
 		} else {
 			// For case: ClusterSize=1 or when multi-node cluster(ClusterSize>1) is bootstrapped
+			// For case: mulitnode clusters with backups disabled, force the cluster to be boostrapped again
 			start := time.Now()
 			restored, err := e.restoreCorruptData()
 			if err != nil {
