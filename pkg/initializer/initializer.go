@@ -103,28 +103,42 @@ func (e *EtcdInitializer) Initialize(mode validator.Mode, failBelowRevision int6
 
 	metrics.ValidationDurationSeconds.With(prometheus.Labels{metrics.LabelSucceeded: metrics.ValueSucceededTrue}).Observe(time.Since(start).Seconds())
 
-	if dataDirStatus != validator.DataDirectoryValid {
-		if dataDirStatus == validator.DataDirStatusInvalidInMultiNode ||
-			(e.Validator.OriginalClusterSize > 1 && dataDirStatus == validator.DataDirectoryCorrupt) ||
-			(e.Validator.OriginalClusterSize > 1 && memberHeartbeatPresent && e.Config.SnapstoreConfig != nil) {
-			start := time.Now()
-			if err := e.restoreInMultiNode(ctx); err != nil {
-				metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleMemberInMultiNode, metrics.LabelSucceeded: metrics.ValueSucceededFalse}).Observe(time.Since(start).Seconds())
-				return err
-			}
-			metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleMemberInMultiNode, metrics.LabelSucceeded: metrics.ValueSucceededTrue}).Observe(time.Since(start).Seconds())
-		} else {
-			// For case: ClusterSize=1 or when multi-node cluster(ClusterSize>1) is bootstrapped
-			// For case: mulitnode clusters with backups disabled, force the cluster to be boostrapped again
-			start := time.Now()
-			restored, err := e.restoreCorruptData()
-			if err != nil {
-				metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleNode, metrics.LabelSucceeded: metrics.ValueSucceededFalse}).Observe(time.Since(start).Seconds())
-				return fmt.Errorf("error while restoring corrupt data: %v", err)
-			}
-			if restored {
-				metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleNode, metrics.LabelSucceeded: metrics.ValueSucceededTrue}).Observe(time.Since(start).Seconds())
-			}
+	if dataDirStatus == validator.DataDirectoryValid {
+		return nil
+	}
+
+	// TODO: @renormalize check the git blame to get more context about why memberHeartbeatPresent was added here
+	// force clusters without backups to bootstrap again
+	if dataDirStatus == validator.DataDirectoryNotExist && e.Config.SnapstoreConfig == nil && !memberHeartbeatPresent {
+		logger.Info("Crux log: Etcd cluster is being boostrapped again since the SnapstoreConfig is nil")
+		start := time.Now()
+		restored, err := e.restoreCorruptData()
+		if err != nil {
+			metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleNode, metrics.LabelSucceeded: metrics.ValueSucceededFalse}).Observe(time.Since(start).Seconds())
+			return fmt.Errorf("error while restoring corrupt data: %v", err)
+		}
+		if restored {
+			metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleNode, metrics.LabelSucceeded: metrics.ValueSucceededTrue}).Observe(time.Since(start).Seconds())
+		}
+	} else if e.Validator.OriginalClusterSize > 1 && (dataDirStatus == validator.DataDirStatusInvalidInMultiNode || dataDirStatus == validator.DataDirectoryCorrupt || memberHeartbeatPresent) {
+		logger.Info("Crux log: Etcd member is being added as a member in a multinode cluster")
+		start := time.Now()
+		if err := e.restoreInMultiNode(ctx); err != nil {
+			metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleMemberInMultiNode, metrics.LabelSucceeded: metrics.ValueSucceededFalse}).Observe(time.Since(start).Seconds())
+			return err
+		}
+		metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleMemberInMultiNode, metrics.LabelSucceeded: metrics.ValueSucceededTrue}).Observe(time.Since(start).Seconds())
+	} else {
+		// For case: ClusterSize=1 or when multi-node cluster(ClusterSize>1) is bootstrapped
+		logger.Info("Crux log: Etcd cluster is being boostrapped")
+		start := time.Now()
+		restored, err := e.restoreCorruptData()
+		if err != nil {
+			metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleNode, metrics.LabelSucceeded: metrics.ValueSucceededFalse}).Observe(time.Since(start).Seconds())
+			return fmt.Errorf("error while restoring corrupt data: %v", err)
+		}
+		if restored {
+			metrics.RestorationDurationSeconds.With(prometheus.Labels{metrics.LabelRestorationKind: metrics.ValueRestoreSingleNode, metrics.LabelSucceeded: metrics.ValueSucceededTrue}).Observe(time.Since(start).Seconds())
 		}
 	}
 
