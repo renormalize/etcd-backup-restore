@@ -385,6 +385,12 @@ func (m *memberControl) WasMemberInCluster(ctx context.Context, clientSet client
 	}
 
 	if memberLease.Spec.HolderIdentity == nil {
+		m.logger.Info("the holder identity is not present, the member is assumed not to be in a cluster")
+		return false
+	}
+
+	if time.Now().Sub(memberLease.Spec.RenewTime.Time) > 2*brtypes.DefaultHeartbeatDuration {
+		m.logger.Info("the lease renewal was 2 heartbeats before now, returning false so member is removed")
 		return false
 	}
 	return true
