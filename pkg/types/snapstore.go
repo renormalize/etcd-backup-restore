@@ -51,7 +51,7 @@ const (
 
 	// ChunkDirSuffix is the suffix appended to the name of chunk snapshot folder when using fakegcs emulator for testing.
 	// Refer to this github issue for more details: https://github.com/fsouza/fake-gcs-server/issues/1434
-	ChunkDirSuffix = ".chunk"
+	// ChunkDirSuffix = ".chunk"
 
 	backupFormatVersion = "v2"
 
@@ -222,6 +222,7 @@ func (c *SnapstoreConfig) addFlags(fs *flag.FlagSet, parameterPrefix string) {
 	fs.UintVar(&c.MaxParallelChunkUploads, parameterPrefix+"max-parallel-chunk-uploads", c.MaxParallelChunkUploads, "maximum number of parallel chunk uploads allowed")
 	fs.Int64Var(&c.MinChunkSize, parameterPrefix+"min-chunk-size", c.MinChunkSize, "Minimum size for multipart chunk upload")
 	fs.StringVar(&c.TempDir, parameterPrefix+"snapstore-temp-directory", c.TempDir, "temporary directory for processing")
+	fs.BoolVar(&c.IsEmulatorEnabled, parameterPrefix+"emulator-enabled", c.IsEmulatorEnabled, "enables usage with emulators")
 }
 
 // Validate validates the config.
@@ -233,8 +234,9 @@ func (c *SnapstoreConfig) Validate() error {
 		return fmt.Errorf("min chunk size for multi-part chunk upload should be greater than or equal to 5 MiB")
 	}
 	if c.Endpoint != "" {
-		_, err := url.Parse(c.Endpoint)
-		return fmt.Errorf("endpoint override specified must be a valid URL: %w", err)
+		if _, err := url.Parse(c.Endpoint); err != nil {
+			return fmt.Errorf("endpoint override specified must be a valid URL: %w", err)
+		}
 	}
 	return nil
 }

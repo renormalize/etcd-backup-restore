@@ -87,22 +87,20 @@ const (
 func NewGCSSnapStore(config *brtypes.SnapstoreConfig) (*GCSSnapStore, error) {
 	ctx := context.TODO()
 
-	if err := validateGCSCredential(config); err != nil {
-		return nil, err
-	}
+	// TODO: @renormalize uncomment this since this is necessary code
+	// if err := validateGCSCredential(config); err != nil {
+	// 	return nil, err
+	// }
 	var opts []option.ClientOption // no need to explicitly set store credentials here since the Google SDK picks it up from the standard environment variable
 	if config.Endpoint != "" {
 		opts = append(opts, option.WithEndpoint(config.Endpoint))
 	}
 
-	var chunkDirSuffix string
-	// TODO: this could be improved as well, emulator code should not be present here.
-	if config.IsEmulatorEnabled {
-		// TODO: os.Setenv("STORAGE_EMULATOR_HOST", strings.TrimPrefix(e.endpoint, "http://"))
-		// The STORAGE_EMULATOR_HOST env var must be set correctly as above
-		// opts, err = emulatorConfig.configureClient(opts)
-		chunkDirSuffix = brtypes.ChunkDirSuffix
-	}
+	// var chunkDirSuffix string
+	// // TODO: this could be improved as well, emulator code should not be present here.
+	// if config.IsEmulatorEnabled {
+	// 	chunkDirSuffix = brtypes.ChunkDirSuffix
+	// }
 
 	if config.IsSource {
 		filename, ok := os.LookupEnv(envSourceStoreCredentials)
@@ -118,11 +116,11 @@ func NewGCSSnapStore(config *brtypes.SnapstoreConfig) (*GCSSnapStore, error) {
 	}
 	gcsClient := stiface.AdaptClient(cli)
 
-	return NewGCSSnapStoreFromClient(config.Container, config.Prefix, config.TempDir, config.MaxParallelChunkUploads, config.MinChunkSize, chunkDirSuffix, gcsClient), nil
+	return NewGCSSnapStoreFromClient(config.Container, config.Prefix, config.TempDir, config.MaxParallelChunkUploads, config.MinChunkSize, gcsClient), nil
 }
 
 // NewGCSSnapStoreFromClient create new GCSSnapStore from shared configuration with specified bucket.
-func NewGCSSnapStoreFromClient(bucket, prefix, tempDir string, maxParallelChunkUploads uint, minChunkSize int64, chunkDirSuffix string, cli stiface.Client) *GCSSnapStore {
+func NewGCSSnapStoreFromClient(bucket, prefix, tempDir string, maxParallelChunkUploads uint, minChunkSize int64, cli stiface.Client) *GCSSnapStore {
 	return &GCSSnapStore{
 		prefix:                  prefix,
 		client:                  cli,
@@ -130,19 +128,9 @@ func NewGCSSnapStoreFromClient(bucket, prefix, tempDir string, maxParallelChunkU
 		maxParallelChunkUploads: maxParallelChunkUploads,
 		minChunkSize:            minChunkSize,
 		tempDir:                 tempDir,
-		chunkDirSuffix:          chunkDirSuffix,
+		// chunkDirSuffix:          chunkDirSuffix,
 	}
 }
-
-// // configureClient configures the fake gcs emulator
-// func (e *gcsEmulatorConfig) configureClient(opts []option.ClientOption) ([]option.ClientOption, error) {
-// 	// TODO: wouldn't the process inherit these variables from the parent shell anyway when running locally?
-// 	err := os.Setenv("STORAGE_EMULATOR_HOST", strings.TrimPrefix(e.endpoint, "http://"))
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to set the environment variable for the fake GCS emulator: %v", err)
-// 	}
-// 	return append(opts, option.WithoutAuthentication()), nil
-// }
 
 // Fetch should open reader for the snapshot file from store.
 func (s *GCSSnapStore) Fetch(snap brtypes.Snapshot) (io.ReadCloser, error) {
